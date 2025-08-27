@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expense Tracker 2.0.0</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {margin:0;padding:0;box-sizing:border-box;font-family:"Prompt",sans-serif;}
+    body {
+      background:#f4f6f9;
+      color:#333;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      min-height:100vh;
+      padding:20px;
+    }
+    .app {
+      background:#fff;
+      width:100%;
+      max-width:800px;
+      border-radius:20px;
+      box-shadow:0 8px 20px rgba(0,0,0,0.1);
+      padding:20px;
+    }
+    h1 {
+      text-align:center;
+      margin-bottom:20px;
+      color:#e63946;
+    }
+    .form {
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+      gap:10px;
+      margin-bottom:20px;
+    }
+    .form input,.form select,.form button {
+      padding:10px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      font-size:14px;
+    }
+    .form button {
+      background:#e63946;
+      color:#fff;
+      cursor:pointer;
+      border:none;
+      transition:.3s;
+    }
+    .form button:hover {background:#b3261e;}
+    .summary {
+      text-align:center;
+      margin:20px 0;
+      padding:15px;
+      background:#ffe0e0;
+      color:#b3261e;
+      border-radius:12px;
+      font-size:18px;
+    }
+    table {
+      width:100%;
+      border-collapse:collapse;
+      margin-top:10px;
+    }
+    th,td {
+      padding:10px;
+      text-align:center;
+      border-bottom:1px solid #eee;
+    }
+    th {background:#f1f5f9;}
+    .delete-btn {
+      color:#fff;
+      background:#e63946;
+      border:none;
+      padding:5px 10px;
+      border-radius:6px;
+      cursor:pointer;
+    }
+    .edit-btn {
+      color:#fff;
+      background:#007bff;
+      border:none;
+      padding:5px 10px;
+      border-radius:6px;
+      cursor:pointer;
+      margin-right:5px;
+    }
+    canvas {
+      display:block;
+      margin:30px auto 0;
+      max-width:500px;      /* ความกว้างสูงสุด */
+      height:350px !important; /* ความสูงคงที่ */
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>ระบบบันทึกรายจ่าย v2.0.0</h1>
+
+    <!-- ฟอร์มเพิ่มรายจ่าย -->
+    <div class="form">
+      <input type="text" id="desc" placeholder="รายละเอียดรายจ่าย">
+      <input type="number" id="amount" placeholder="จำนวนเงิน">
+      <select id="category">
+        <option value="ทั่วไป">ทั่วไป</option>
+        <option value="อาหาร">อาหาร</option>
+        <option value="เดินทาง">เดินทาง</option>
+        <option value="บิล">บิล</option>
+        <option value="บันเทิง">บันเทิง</option>
+      </select>
+      <input type="date" id="date">
+      <button onclick="addExpense()">บันทึก</button>
+    </div>
+
+    <!-- สรุป -->
+    <div class="summary">
+      💸 รายจ่ายรวม: <span id="totalExpense">0</span> บาท
+    </div>
+
+    <!-- ตาราง -->
+    <table>
+      <thead>
+        <tr>
+          <th>วันที่</th>
+          <th>รายละเอียด</th>
+          <th>หมวดหมู่</th>
+          <th>จำนวน</th>
+          <th>จัดการ</th>
+        </tr>
+      </thead>
+      <tbody id="expenseList"></tbody>
+    </table>
+
+    <!-- กราฟ -->
+    <canvas id="chart"></canvas>
+  </div>
+
+  <script>
+    let expenses = JSON.parse(localStorage.getItem("expenses")) || [];
+    let editingIndex = null;
+
+    function saveData() {
+      localStorage.setItem("expenses", JSON.stringify(expenses));
+    }
+
+    function render() {
+      const list = document.getElementById("expenseList");
+      list.innerHTML = "";
+      let total = 0;
+
+      expenses.forEach((e, index) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${e.date}</td>
+          <td>${e.desc}</td>
+          <td>${e.category}</td>
+          <td>${e.amount} ฿</td>
+          <td>
+            <button class="edit-btn" onclick="editExpense(${index})">แก้ไข</button>
+            <button class="delete-btn" onclick="deleteExpense(${index})">ลบ</button>
+          </td>`;
+        list.appendChild(tr);
+
+        total += e.amount;
+      });
+
+      document.getElementById("totalExpense").innerText = total;
+      updateChart();
+      saveData();
+    }
+
+    function addExpense() {
+      const desc = document.getElementById("desc").value.trim();
+      const amount = parseFloat(document.getElementById("amount").value);
+      const category = document.getElementById("category").value;
+      const date = document.getElementById("date").value;
+
+      if(!desc || !amount || !date) return alert("กรุณากรอกข้อมูลให้ครบ!");
+
+      if(editingIndex !== null) {
+        expenses[editingIndex] = { desc, amount, category, date };
+        editingIndex = null;
+      } else {
+        expenses.push({ desc, amount, category, date });
+      }
+
+      document.querySelectorAll(".form input").forEach(i => i.value = "");
+      render();
+    }
+
+    function deleteExpense(index) {
+      if(confirm("คุณต้องการลบข้อมูลนี้หรือไม่?")) {
+        expenses.splice(index, 1);
+        render();
+      }
+    }
+
+    function editExpense(index) {
+      const e = expenses[index];
+      document.getElementById("desc").value = e.desc;
+      document.getElementById("amount").value = e.amount;
+      document.getElementById("category").value = e.category;
+      document.getElementById("date").value = e.date;
+      editingIndex = index;
+    }
+
+    // Chart
+    let chart;
+    function updateChart() {
+      const ctx = document.getElementById("chart").getContext("2d");
+      if(chart) chart.destroy();
+
+      // รวมรายจ่ายตามหมวดหมู่
+      let categorySum = {};
+      expenses.forEach(e => {
+        categorySum[e.category] = (categorySum[e.category] || 0) + e.amount;
+      });
+
+      chart = new Chart(ctx, {
+        type:"doughnut",
+        data:{
+          labels:Object.keys(categorySum),
+          datasets:[{
+            data:Object.values(categorySum),
+            backgroundColor:["#f44336","#ff9800","#4caf50","#2196f3","#9c27b0"]
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            legend:{ position:"bottom" }
+          },
+          animation:{
+            animateRotate:true,
+            animateScale:true
+          }
+        }
+      });
+    }
+
+    render();
+  </script>
+</body>
+</html>
